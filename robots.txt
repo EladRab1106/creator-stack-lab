@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://eladrab1106.github.io/creator-stack-lab/sitemap.xml

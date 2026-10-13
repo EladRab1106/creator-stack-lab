@@ -1,0 +1,51 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>How to Auto-Caption Shorts for Free (Whisper + FFmpeg, Copy-Paste Script)</title><meta name=description content="Word-by-word burned-in captions for YouTube Shorts, Reels and TikTok, offline and free. The exact script I use, plus when a paid tool is worth it."><link rel=canonical href="https://eladrab1106.github.io/creator-stack-lab/auto-caption-shorts-free/">
+<meta property=og:title content="How to Auto-Caption Shorts for Free (Whisper + FFmpeg, Copy-Paste Script)"><meta property=og:description content="Word-by-word burned-in captions for YouTube Shorts, Reels and TikTok, offline and free. The exact script I use, plus when a paid tool is worth it."><meta property=og:url content="https://eladrab1106.github.io/creator-stack-lab/auto-caption-shorts-free/">
+<style>:root{--bg:#fff;--fg:#14161a;--mut:#5d6470;--line:#e6e8eb;--card:#f6f7f9;--acc:#0b6b4f}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e9ecf1;--mut:#9aa3ad;--line:#262a31;--card:#171a20;--acc:#4fd1a5}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:720px;margin:auto;padding:28px 16px 64px}a{color:var(--acc)}h1{font-size:30px;line-height:1.2;margin:.2em 0}
+h2{font-size:22px;margin-top:1.8em}nav{font-size:15px;color:var(--mut)}nav a{color:inherit}.meta{color:var(--mut);font-size:14px}
+.disc{font-size:14px;color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:16px 0}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;overflow-x:auto;font-size:14px;line-height:1.45}
+code{font-size:.92em}table{border-collapse:collapse;width:100%;font-size:15px}td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+.wrap{overflow-x:auto}.cta{display:inline-block;background:var(--acc);color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:600}
+.cards a{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0;color:inherit;text-decoration:none}
+.cards b{display:block;font-size:18px}.cards span{color:var(--mut);font-size:15px}footer{color:var(--mut);font-size:13px;margin-top:48px}</style></head><body><main><nav><a href="https://eladrab1106.github.io/creator-stack-lab/">Creator Stack Lab</a> · <a href="https://eladrab1106.github.io/creator-stack-lab/disclosure/">Disclosure</a></nav>
+<h1>How to Auto-Caption Shorts for Free (Whisper + FFmpeg, Copy-Paste Script)</h1><p class=meta>Updated 2026-10-13</p><p class=disc>Disclosure: links marked as product links on this page are affiliate links. If you subscribe through them I may earn a commission at no extra cost to you. It never changes what I write.</p><p>Most people watch Shorts with the sound off, so burned-in captions matter. You don&#x27;t need a subscription to get the popular &#x27;three big words at a time&#x27; style: a free speech-to-text model and FFmpeg can do it on your own computer.</p>
+<h2>What you need</h2>
+<ul><li>Python 3.9 or newer</li><li>FFmpeg (on Mac: <code>brew install ffmpeg</code>)</li><li>The faster-whisper library: <code>pip install faster-whisper</code></li></ul>
+<h2>The script</h2>
+<p>Save this as <code>caption.py</code>. It transcribes the video with word timestamps, groups the words three at a time, writes an ASS subtitle file with big outlined text, and burns it into a new video.</p>
+<pre><code># caption.py - burn word-by-word captions into a video, free and offline
+# pip install faster-whisper   (and install ffmpeg)
+import subprocess, sys
+from faster_whisper import WhisperModel
+
+src, out = sys.argv[1], sys.argv[2]
+words = [w for seg in WhisperModel(&quot;small&quot;, device=&quot;cpu&quot;, compute_type=&quot;int8&quot;)
+         .transcribe(src, word_timestamps=True)[0] for w in seg.words]
+
+def ts(t):  # seconds -&gt; ASS time h:mm:ss.cc
+    return f&quot;{int(t//3600)}:{int(t%3600//60):02d}:{t%60:05.2f}&quot;
+
+lines = [&quot;[Script Info]&quot;, &quot;PlayResX: 1080&quot;, &quot;PlayResY: 1920&quot;, &quot;[V4+ Styles]&quot;,
+         &quot;Format: Name,Fontname,Fontsize,PrimaryColour,OutlineColour,BackColour,Bold,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV&quot;,
+         &quot;Style: Cap,Arial Black,84,&amp;H00FFFFFF,&amp;H00000000,&amp;H80000000,1,1,6,2,2,60,60,540&quot;,
+         &quot;[Events]&quot;, &quot;Format: Layer,Start,End,Style,Text&quot;]
+for i in range(0, len(words), 3):              # 3 words per caption = easy to read on a phone
+    chunk = words[i:i + 3]
+    end = words[i + 3].start if i + 3 &lt; len(words) else chunk[-1].end
+    text = &quot; &quot;.join(w.word.strip() for w in chunk).upper()
+    lines.append(f&quot;Dialogue: 0,{ts(chunk[0].start)},{ts(end)},Cap,{text}&quot;)
+open(&quot;captions.ass&quot;, &quot;w&quot;).write(&quot;\n&quot;.join(lines) + &quot;\n&quot;)
+
+subprocess.run([&quot;ffmpeg&quot;, &quot;-y&quot;, &quot;-i&quot;, src, &quot;-vf&quot;, &quot;ass=captions.ass&quot;, &quot;-c:a&quot;, &quot;copy&quot;, out], check=True)</code></pre>
+<p>Run it with <code>python caption.py input.mp4 output.mp4</code>. The first run downloads the model (a few hundred MB). On my laptop a 40-second clip takes well under a minute.</p>
+<h2>Tweaks that matter</h2>
+<ul><li><b>Position:</b> the last number in the Style line (540) is the distance from the bottom edge. Keep captions above the bottom ~340 px so the app buttons don&#x27;t cover them.</li><li><b>Size:</b> change 84 to make the text bigger or smaller.</li><li><b>Words per caption:</b> change the 3 in the loop. Two to three words reads best on a phone.</li><li><b>Accuracy:</b> use the <code>medium</code> model instead of <code>small</code> if names come out wrong. It is slower.</li></ul>
+<h2>When a paid tool is worth it</h2>
+<p>The script gives you clean captions, nothing more. If you also want animated styles, emojis, automatic zooms, silence removal or B-roll without touching code, that is what tools like Submagic sell. According to its pricing page, Submagic&#x27;s Starter plan is $12/month billed yearly ($19 monthly) for 15 videos a month up to 2 minutes, without a watermark. I haven&#x27;t run it head-to-head against this script, so I&#x27;m only telling you what it offers, not that it&#x27;s better.</p>
+<p><a href="https://submagic.co/?via=elad-544355&amp;fp_sid=auto-caption-shorts-free" rel="sponsored noopener">See Submagic&#x27;s plans</a></p>
+<p>If you post a few videos a week and are comfortable running a script, the free route is enough. If you post daily and value your time, a paid editor can make sense.</p><h2>Sources</h2><ul><li><a href="https://github.com/SYSTRAN/faster-whisper" rel="noopener">https://github.com/SYSTRAN/faster-whisper</a> (read 2026-10-13)</li><li><a href="https://ffmpeg.org/ffmpeg-filters.html#ass" rel="noopener">https://ffmpeg.org/ffmpeg-filters.html#ass</a> (read 2026-10-13)</li><li><a href="https://www.submagic.co/pricing" rel="noopener">https://www.submagic.co/pricing</a> (read 2026-10-13)</li></ul><p class=meta>What I actually used myself for this page: I wrote and ran this script myself on 2026-10-13 (macOS, Python 3.11, faster-whisper &#x27;small&#x27; model, ffmpeg 8). I use the same approach to caption every Short on my channel.</p>
+<footer>Creator Stack Lab · Independent notes on short-form video tools. Prices change; check the official page before buying.</footer></main></body></html>
